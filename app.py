@@ -11,7 +11,10 @@ from flask import (
     send_file,
 )
 
-app = Flask(__name__)
+# -----------------------------
+# FLASK APP
+# -----------------------------
+app = Flask(__name__, template_folder="templates")
 app.secret_key = "legal_cleaner_secret_key"
 
 
@@ -20,11 +23,10 @@ app.secret_key = "legal_cleaner_secret_key"
 # -----------------------------
 def clean_text_data(text):
 
-    # Remove unwanted slash symbols
+    # Remove slash symbols
     cleaned = re.sub(r"/", "", text)
 
-    # Remove page headers like:
-    # Page 25 of [2025] KEHC...
+    # Remove page headers
     cleaned = re.sub(
         r"Page\s+\d+\s+of\s+.*?(?=\n|$)",
         "",
@@ -38,10 +40,11 @@ def clean_text_data(text):
     # Remove multiple blank lines
     cleaned = re.sub(r"\n\s*\n+", "\n\n", cleaned)
 
-    # Clean line by line
+    # Clean line-by-line
     lines = cleaned.splitlines()
 
     final_lines = []
+
     for line in lines:
         line = line.strip()
 
@@ -59,7 +62,7 @@ def index():
 
     if request.method == "POST":
 
-        # Check file exists
+        # Check file uploaded
         if "file" not in request.files:
             flash("No file uploaded")
             return redirect(request.url)
@@ -76,11 +79,12 @@ def index():
 
         try:
 
-            # ------------------------------------------------
-            # DOCX / DOC FILE PROCESSING
-            # ------------------------------------------------
-            if extension in [".docx", ".doc"]:
+            # -----------------------------------------
+            # DOCX FILE PROCESSING
+            # -----------------------------------------
+            if extension == ".docx":
 
+                # Read document
                 doc = Document(file)
 
                 full_text = []
@@ -93,7 +97,7 @@ def index():
                 # Clean text
                 cleaned_content = clean_text_data(raw_content)
 
-                # Create output document
+                # Create new document
                 output_doc = Document()
 
                 for line in cleaned_content.split("\n"):
@@ -101,25 +105,22 @@ def index():
 
                 # Save to memory
                 memory_file = BytesIO()
+
                 output_doc.save(memory_file)
+
                 memory_file.seek(0)
 
-                # Output filename
-                if extension == ".docx":
-                    new_filename = f"Cleaned_{filename}"
-                else:
-                    new_filename = f"Cleaned_{filename}.docx"
-
+                # Return cleaned document
                 return send_file(
                     memory_file,
                     as_attachment=True,
-                    download_name=new_filename,
+                    download_name=f"Cleaned_{filename}",
                     mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 )
 
-            # ------------------------------------------------
+            # -----------------------------------------
             # TXT FILE PROCESSING
-            # ------------------------------------------------
+            # -----------------------------------------
             elif extension == ".txt":
 
                 raw_content = file.read().decode(
@@ -130,7 +131,11 @@ def index():
                 cleaned_content = clean_text_data(raw_content)
 
                 memory_file = BytesIO()
-                memory_file.write(cleaned_content.encode("utf-8"))
+
+                memory_file.write(
+                    cleaned_content.encode("utf-8")
+                )
+
                 memory_file.seek(0)
 
                 return send_file(
@@ -140,24 +145,28 @@ def index():
                     mimetype="text/plain",
                 )
 
-            # ------------------------------------------------
-            # UNSUPPORTED FORMAT
-            # ------------------------------------------------
+            # -----------------------------------------
+            # INVALID FILE FORMAT
+            # -----------------------------------------
             else:
+
                 flash(
-                    "Unsupported file format! Upload .docx, .doc or .txt files only."
+                    "Only .docx and .txt files are supported."
                 )
+
                 return redirect(request.url)
 
         except Exception as e:
+
             flash(f"Error processing file: {str(e)}")
+
             return redirect(request.url)
 
     return render_template("index.html")
 
 
 # -----------------------------
-# RUN APP
+# MAIN
 # -----------------------------
 if __name__ == "__main__":
     app.run(debug=True)
